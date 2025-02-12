@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learn Prim's Algorithm</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .canvas-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+        canvas {
+            border: 2px solid #333;
+            background-color: white;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+        .button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .score {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+        .instructions {
+            background-color: #e9f5ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .solution-text {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Learn Prim's Algorithm</h1>
+        
+        <div class="instructions">
+            <h2>How to Play</h2>
+            <p>1. Click on edges to build a minimum spanning tree</p>
+            <p>2. Start from any vertex and select the smallest weight edge that connects to a new vertex</p>
+            <p>3. Continue until all vertices are connected</p>
+            <p>4. Try to achieve the minimum total weight!</p>
+            <p>5. Compare your solution with the optimal MST shown on the right</p>
+        </div>
+
+        <div class="controls">
+            <button id="newGame" class="button">New Game</button>
+            <button id="check" class="button">Check Solution</button>
+            <button id="hint" class="button">Get Hint</button>
+            <button id="showSolution" class="button">Show/Hide Solution</button>
+            <span class="score">Your Total Weight: <span id="weight">0</span></span>
+            <span class="score" style="margin-left: 20px">Optimal Weight: <span id="optimalWeight">0</span></span>
+        </div>
+
+        <div class="canvas-container">
+            <div>
+                <h3>Your Graph</h3>
+                <canvas id="canvas" width="700" height="500"></canvas>
+            </div>
+            <div>
+                <h3>Optimal Solution</h3>
+                <canvas id="solutionCanvas" width="700" height="500"></canvas>
+            </div>
+        </div>
+
+        <div id="feedback"></div>
+    </div>
+
+    <script>
+        class Graph {
+            constructor() {
+                this.vertices = [];
+                this.edges = [];
+                this.selectedEdges = new Set();
+                this.optimalMST = new Set();
+            }
+
+            addVertex(x, y) {
+                this.vertices.push({x, y, id: this.vertices.length});
+            }
+
+            addEdge(v1, v2, weight) {
+                this.edges.push({
+                    v1, v2, weight,
+                    selected: false
+                });
+            }
+
+            generateRandomGraph() {
+                this.vertices = [];
+                this.edges = [];
+                this.selectedEdges.clear();
+                this.optimalMST.clear();
+
+                // Generate vertices in a circular layout
+                const centerX = 350;
+                const centerY = 250;
+                const radius = 180;
+                const numVertices = 6;
+                
+                for (let i = 0; i < numVertices; i++) {
+                    const angle = (i * 2 * Math.PI / numVertices) - Math.PI/2;
+                    const x = centerX + radius * Math.cos(angle);
+                    const y = centerY + radius * Math.sin(angle);
+                    this.addVertex(x, y);
+                }
+
+                // Generate edges with random weights
+                for (let i = 0; i < this.vertices.length; i++) {
+                    for (let j = i + 1; j < this.vertices.length; j++) {
+                        const v1 = this.vertices[i];
+                        const v2 = this.vertices[j];
+                        const dist = Math.sqrt(Math.pow(v2.x - v1.x, 2) + Math.pow(v2.y - v1.y, 2));
+                        
+                        if (dist >= 100) {
+                            const weight = Math.floor(Math.random() * 20) + 1;
+                            this.addEdge(i, j, weight);
+                        }
+                    }
+                }
+
+                // Ensure the graph is connected
+                for (let i = 0; i < this.vertices.length - 1; i++) {
+                    const weight = Math.floor(Math.random() * 20) + 1;
+                    this.addEdge(i, i + 1, weight);
+                }
+
+                // Calculate optimal MST using Prim's algorithm
+                this.calculateOptimalMST();
+            }
+
+            calculateOptimalMST() {
+                const visited = new Set([0]);
+                const mst = new Set();
+                
+                while (visited.size < this.vertices.length) {
+                    let minWeight = Infinity;
+                    let minEdge = null;
+                    
+                    this.edges.forEach(edge => {
+                        const v1Visited = visited.has(edge.v1);
+                        const v2Visited = visited.has(edge.v2);
+                        
+                        if ((v1Visited && !v2Visited) || (!v1Visited && v2Visited)) {
+                            if (edge.weight < minWeight) {
+                                minWeight = edge.weight;
+                                minEdge = edge;
+                            }
+                        }
+                    });
+                    
+                    if (minEdge) {
+                        mst.add(minEdge);
+                        visited.add(minEdge.v1);
+                        visited.add(minEdge.v2);
+                    }
+                }
+                
+                this.optimalMST = mst;
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.solutionCanvas = document.getElementById('solutionCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.solutionCtx = this.solutionCanvas.getContext('2d');
+                this.graph = new Graph();
+                this.showingSolution = false;
+                this.init();
+            }
+
+            init() {
+                this.graph.generateRandomGraph();
+                this.draw();
+                this.addEventListeners();
+                this.updateOptimalWeight();
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.solutionCtx.clearRect(0, 0, this.solutionCanvas.width, this.solutionCanvas.height);
+                
+                // Draw both graphs
+                this.drawGraph(this.ctx, this.graph.selectedEdges);
+                if (this.showingSolution) {
+                    this.drawGraph(this.solutionCtx, this.graph.optimalMST);
+                }
+            }
+
+            drawGraph(context, selectedEdges) {
+                // Draw edges
+                this.graph.edges.forEach(edge => {
+                    const v1 = this.graph.vertices[edge.v1];
+                    const v2 = this.graph.vertices[edge.v2];
+                    
+                    context.beginPath();
+                    context.moveTo(v1.x, v1.y);
+                    context.lineTo(v2.x, v2.y);
+                    context.strokeStyle = selectedEdges.has(edge) ? '#4CAF50' : '#999';
+                    context.lineWidth = selectedEdges.has(edge) ? 3 : 1;
+                    context.stroke();
+
+                    const midX = (v1.x + v2.x) / 2;
+                    const midY = (v1.y + v2.y) / 2;
+                    
+                    context.fillStyle = 'white';
+                    context.beginPath();
+                    context.arc(midX, midY, 12, 0, 2 * Math.PI);
+                    context.fill();
+                    
+                    context.fillStyle = '#333';
+                    context.font = '14px Arial';
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText(edge.weight, midX, midY);
+                });
+
+                // Draw vertices
+                this.graph.vertices.forEach(vertex => {
+                    context.beginPath();
+                    context.arc(vertex.x, vertex.y, 15, 0, 2 * Math.PI);
+                    context.fillStyle = '#4CAF50';
+                    context.fill();
+                    context.fillStyle = 'white';
+                    context.font = '12px Arial';
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText(vertex.id, vertex.x, vertex.y);
+                });
+            }
+
+            addEventListeners() {
+                this.canvas.addEventListener('click', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    this.graph.edges.forEach(edge => {
+                        const v1 = this.graph.vertices[edge.v1];
+                        const v2 = this.graph.vertices[edge.v2];
+                        
+                        if (this.isClickNearLine(x, y, v1.x, v1.y, v2.x, v2.y)) {
+                            if (this.graph.selectedEdges.has(edge)) {
+                                this.graph.selectedEdges.delete(edge);
+                            } else {
+                                this.graph.selectedEdges.add(edge);
+                            }
+                            this.updateWeight();
+                            this.draw();
+                        }
+                    });
+                });
+
+                document.getElementById('newGame').addEventListener('click', () => {
+                    this.init();
+                    this.updateWeight();
+                });
+
+                document.getElementById('check').addEventListener('click', () => {
+                    this.checkSolution();
+                });
+
+                document.getElementById('hint').addEventListener('click', () => {
+                    this.showHint();
+                });
+
+                document.getElementById('showSolution').addEventListener('click', () => {
+                    this.showingSolution = !this.showingSolution;
+                    this.draw();
+                });
+            }
+
+            isClickNearLine(x, y, x1, y1, x2, y2) {
+                const A = x - x1;
+                const B = y - y1;
+                const C = x2 - x1;
+                const D = y2 - y1;
+                
+                const dot = A * C + B * D;
+                const len_sq = C * C + D * D;
+                const param = dot / len_sq;
+                
+                let xx, yy;
+                
+                if (param < 0) {
+                    xx = x1;
+                    yy = y1;
+                } else if (param > 1) {
+                    xx = x2;
+                    yy = y2;
+                } else {
+                    xx = x1 + param * C;
+                    yy = y1 + param * D;
+                }
+                
+                const dx = x - xx;
+                const dy = y - yy;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                return distance < 10;
+            }
+
+            updateWeight() {
+                let totalWeight = 0;
+                this.graph.selectedEdges.forEach(edge => {
+                    totalWeight += edge.weight;
+                });
+                document.getElementById('weight').textContent = totalWeight;
+            }
+
+            updateOptimalWeight() {
+                let optimalWeight = 0;
+                this.graph.optimalMST.forEach(edge => {
+                    optimalWeight += edge.weight;
+                });
+                document.getElementById('optimalWeight').textContent = optimalWeight;
+            }
+
+            checkSolution() {
+                const feedback = document.getElementById('feedback');
+                const selectedEdges = Array.from(this.graph.selectedEdges);
+                
+                // Check if all vertices are connected
+                const connectedVertices = new Set();
+                selectedEdges.forEach(edge => {
+                    connectedVertices.add(edge.v1);
+                    connectedVertices.add(edge.v2);
+                });
+
+                if (connectedVertices.size !== this.graph.vertices.length) {
+                    feedback.innerHTML = '<p style="color: red;">Not all vertices are connected!</p>';
+                    return;
+                }
+
+                // Check if it forms a tree (no cycles)
+                if (selectedEdges.length !== this.graph.vertices.length - 1) {
+                    feedback.innerHTML = '<p style="color: red;">Your solution contains cycles!</p>';
+                    return;
+                }
+
+                // Calculate total weight
+                let userWeight = 0;
+                selectedEdges.forEach(edge => userWeight += edge.weight);
+                
+                let optimalWeight = 0;
+                this.graph.optimalMST.forEach(edge => optimalWeight += edge.weight);
+
+                if (userWeight === optimalWeight) {
+                    feedback.innerHTML = '<p style="color: green;">Perfect! You\'ve found the optimal minimum spanning tree!</p>';
+                } else {
+                    feedback.innerHTML = `<p style="color: orange;">You've found a valid spanning tree, but there might be a better solution. Your weight: ${userWeight}, Optimal weight: ${optimalWeight}</p>`;
+                }
+            }
+
+            showHint() {
+                const feedback = document.getElementById('feedback');
+                feedback.innerHTML = '<p>Hint: Look for the smallest weight edge that connects to a new vertex!</p>';
+            }
+        }
+
+        // Start the game
+        const game = new Game();
+    </script>
+</body>
+</html>
